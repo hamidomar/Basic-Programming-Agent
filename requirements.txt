@@ -1,0 +1,12 @@
+# E2B Code Interpreter
+e2b-code-interpreter>=0.0.10
+
+# Google Cloud Vertex AI (for Gemini)
+google-cloud-aiplatform>=1.38.0
+
+# Environment management
+python-dotenv>=1.0.0
+
+# Note: google-auth is typically installed with google-cloud-aiplatform
+# If you get auth errors, install it explicitly:
+# google-auth>=2.23.0
