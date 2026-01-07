@@ -3,7 +3,7 @@ E2B Code Execution Wrapper
 """
 import asyncio
 from typing import Dict, Any
-from e2b_code_interpreter import Sandbox
+from e2b_code_interpreter import AsyncSandbox
 
 
 class CodeExecutor:
@@ -15,8 +15,8 @@ class CodeExecutor:
     async def start(self):
         """Initialize the E2B sandbox"""
         print("\n🚀 Starting E2B sandbox...")
-        self.sandbox = await Sandbox.create()
-        print(f"✓ Sandbox ready: {self.sandbox.sandbox_id}\n")
+        self.sandbox = await AsyncSandbox.create()
+        print(f"✓ Sandbox ready: {self.sandbox.id}\n")
     
     async def execute(self, code: str) -> Dict[str, Any]:
         """
@@ -35,14 +35,14 @@ class CodeExecutor:
             }
         
         try:
-            result = await self.sandbox.run_code(code)
+            execution = await self.sandbox.run_code(code)
             
             return {
                 "success": True,
-                "output": result.logs.stdout,
-                "stderr": result.logs.stderr,
-                "error": result.error,
-                "results": result.results
+                "output": execution.logs.stdout,
+                "stderr": execution.logs.stderr,
+                "error": execution.error,
+                "results": execution.results
             }
         except Exception as e:
             return {
@@ -68,12 +68,12 @@ class CodeExecutor:
         
         try:
             print(f"📦 Installing {package}...")
-            result = await self.sandbox.commands.run(f"pip install {package}")
+            process = await self.sandbox.commands.run(f"pip install {package}")
             
             return {
-                "success": result.exit_code == 0,
-                "output": result.stdout,
-                "error": result.stderr if result.exit_code != 0 else None
+                "success": process.exit_code == 0,
+                "output": process.stdout,
+                "error": process.stderr if process.exit_code != 0 else None
             }
         except Exception as e:
             return {
