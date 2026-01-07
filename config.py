@@ -1,32 +1,88 @@
 """
-Configuration for Gemini + E2B Code Execution Agent
+E2B Code Execution Wrapper
 """
-import os
-from dotenv import load_dotenv
+import asyncio
+from typing import Dict, Any
+from e2b_code_interpreter import AsyncSandbox
 
-# Load environment variables
-load_dotenv()
 
-# E2B API key (required)
-E2B_API_KEY = os.getenv("E2B_API_KEY")
-
-if not E2B_API_KEY:
-    raise ValueError(
-        "E2B_API_KEY not found in environment.\n"
-        "Create a .env file with: E2B_API_KEY=your-key-here\n"
-        "Get your key from: https://e2b.dev/"
-    )
-
-# GCP configuration (optional - can be set at runtime)
-GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "")
-GCP_LOCATION = os.getenv("GCP_LOCATION", "us-central1")
-
-# Gemini model configuration
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash-exp")
-
-print("✓ Configuration loaded")
-print(f"  E2B API Key: {'*' * 20}{E2B_API_KEY[-4:]}")
-if GCP_PROJECT_ID:
-    print(f"  GCP Project: {GCP_PROJECT_ID}")
-print(f"  GCP Location: {GCP_LOCATION}")
-print(f"  Gemini Model: {GEMINI_MODEL}")
+class CodeExecutor:
+    """Manages E2B sandbox for secure Python code execution"""
+    
+    def __init__(self):
+        self.sandbox = None
+    
+    async def start(self):
+        """Initialize the E2B sandbox"""
+        print("\n🚀 Starting E2B sandbox...")
+        self.sandbox = await AsyncSandbox.create()
+        print(f"✓ Sandbox ready: {self.sandbox.id}\n")
+    
+    async def execute(self, code: str) -> Dict[str, Any]:
+        """
+        Execute Python code in the sandbox
+        
+        Args:
+            code: Python code to execute
+            
+        Returns:
+            Dictionary with success status, output, and errors
+        """
+        if not self.sandbox:
+            return {
+                "success": False,
+                "error": "Sandbox not initialized. Call start() first."
+            }
+        
+        try:
+            execution = await self.sandbox.run_code(code)
+            
+            return {
+                "success": True,
+                "output": execution.logs.stdout,
+                "stderr": execution.logs.stderr,
+                "error": execution.error,
+                "results": execution.results
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Execution failed: {str(e)}"
+            }
+    
+    async def install_package(self, package: str) -> Dict[str, Any]:
+        """
+        Install a Python package in the sandbox
+        
+        Args:
+            package: Package name (e.g., 'numpy', 'pandas==2.0.0')
+            
+        Returns:
+            Dictionary with success status and output
+        """
+        if not self.sandbox:
+            return {
+                "success": False,
+                "error": "Sandbox not initialized"
+            }
+        
+        try:
+            print(f"📦 Installing {package}...")
+            process = await self.sandbox.commands.run(f"pip install {package}")
+            
+            return {
+                "success": process.exit_code == 0,
+                "output": process.stdout,
+                "error": process.stderr if process.exit_code != 0 else None
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e)
+            }
+    
+    async def stop(self):
+        """Clean up and close the sandbox"""
+        if self.sandbox:
+            await self.sandbox.close()
+            print("\n✓ Sandbox closed")
