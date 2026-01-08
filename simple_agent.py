@@ -1,5 +1,5 @@
 """
-Simple CLI Agent with Gemini + E2B Code Execution
+Simple CLI Agent with Gemini + Code Execution (E2B or VM)
 """
 import asyncio
 import re
@@ -7,6 +7,7 @@ import sys
 import vertexai
 from vertexai.generative_models import GenerativeModel, GenerationConfig
 from code_executor import CodeExecutor
+from vm_executor import VMExecutor
 import config
 
 
@@ -38,7 +39,7 @@ async def main():
     """Main CLI application loop"""
     
     print("\n" + "="*70)
-    print("GEMINI + E2B CODE EXECUTION AGENT")
+    print("GEMINI + CODE EXECUTION AGENT")
     print("="*70)
     
     # Get GCP project ID
@@ -53,20 +54,20 @@ async def main():
     model_name = config.GEMINI_MODEL
     
     # Initialize Vertex AI
-    print(f"\n🔧 Initializing Vertex AI...")
+    print(f"\nInitializing Vertex AI...")
     print(f"  Project: {project_id}")
     print(f"  Location: {location}")
     
     try:
         vertexai.init(project=project_id, location=location)
-        print("✓ Vertex AI initialized (using ADC)")
+        print("Vertex AI initialized (using ADC)")
     except Exception as e:
-        print(f"\n✗ Failed to initialize Vertex AI: {e}")
+        print(f"\nFailed to initialize Vertex AI: {e}")
         print("\nMake sure you've run: gcloud auth application-default login")
         sys.exit(1)
     
     # Initialize Gemini model
-    print(f"\n🤖 Loading Gemini model: {model_name}...")
+    print(f"\nLoading Gemini model: {model_name}...")
     
     system_instruction = """You are a helpful Python coding assistant with code execution capabilities.
 
@@ -84,13 +85,57 @@ Keep code concise and focused on the task."""
             model_name,
             system_instruction=system_instruction
         )
-        print(f"✓ Gemini model ready: {model_name}")
+        print(f"Gemini model ready: {model_name}")
     except Exception as e:
-        print(f"✗ Failed to load model: {e}")
+        print(f"Failed to load model: {e}")
         sys.exit(1)
     
-    # Initialize E2B code executor
-    executor = CodeExecutor()
+    # Choose executor type
+    print("\n" + "="*70)
+    print("EXECUTION ENVIRONMENT SELECTION")
+    print("="*70)
+    
+    executor_type = input("\nUse VM or E2B for code execution? (vm/e2b): ").strip().lower()
+    
+    if executor_type == "vm":
+        print("\nVM Configuration")
+        print("-" * 70)
+        
+        # Get VM details from config or prompt
+        vm_ip = config.VM_IP
+        if not vm_ip:
+            vm_ip = input("Enter VM IP address: ").strip()
+            if not vm_ip:
+                print("Error: VM IP is required")
+                sys.exit(1)
+        
+        username = config.VM_USERNAME
+        if not username:
+            username = input("Enter VM username: ").strip()
+            if not username:
+                print("Error: VM username is required")
+                sys.exit(1)
+        
+        vm_name = config.VM_NAME or None
+        vm_zone = config.VM_ZONE or "us-central1-a"
+        
+        print(f"\n  VM IP: {vm_ip}")
+        print(f"  Username: {username}")
+        if vm_name:
+            print(f"  VM Name: {vm_name}")
+            print(f"  Zone: {vm_zone}")
+        
+        executor = VMExecutor(
+            vm_ip=vm_ip,
+            username=username,
+            vm_name=vm_name,
+            zone=vm_zone
+        )
+    else:
+        print("\nUsing E2B Sandbox")
+        executor = CodeExecutor()
+    
+    # Initialize executor
     await executor.start()
     
     # Generation config
@@ -102,7 +147,7 @@ Keep code concise and focused on the task."""
     )
     
     print("="*70)
-    print("\n💡 Examples:")
+    print("\nExamples:")
     print("  - Calculate the first 10 Fibonacci numbers")
     print("  - Create a bar chart of [1, 4, 9, 16, 25]")
     print("  - Generate 100 random numbers and find their mean\n")
@@ -118,7 +163,7 @@ Keep code concise and focused on the task."""
             user_input = input("You: ").strip()
             
             if user_input.lower() in ['quit', 'exit', 'q']:
-                print("\n👋 Goodbye!")
+                print("\nGoodbye!")
                 break
             
             if not user_input:
@@ -131,7 +176,7 @@ Keep code concise and focused on the task."""
             })
             
             # Call Gemini
-            print("\n🤖 Gemini is thinking...\n")
+            print("\nGemini is thinking...\n")
             
             try:
                 # Start a chat with history
@@ -160,29 +205,29 @@ Keep code concise and focused on the task."""
                     print("─"*70)
                     
                     for i, code in enumerate(code_blocks, 1):
-                        print(f"\n▶ Executing code block {i}/{len(code_blocks)}...\n")
+                        print(f"\nExecuting code block {i}/{len(code_blocks)}...\n")
                         
                         # Execute the code
                         result = await executor.execute(code)
                         
                         if result['success']:
                             if result['output']:
-                                print(f"📤 Output:")
+                                print(f"Output:")
                                 print(result['output'])
                             
                             if result['stderr']:
-                                print(f"\n⚠ Warnings:")
+                                print(f"\nWarnings:")
                                 print(result['stderr'])
                             
                             if result['error']:
-                                print(f"\n❌ Error:")
+                                print(f"\nError:")
                                 print(result['error'])
                                 
                                 # Optionally feed error back to Gemini
                                 error_feedback = f"\nThe code execution resulted in an error:\n{result['error']}\n\nCan you fix this?"
-                                print(f"\n💬 Sending error back to Gemini for debugging...")
+                                print(f"\nSending error back to Gemini for debugging...")
                         else:
-                            print(f"❌ Execution failed: {result['error']}")
+                            print(f"Execution failed: {result['error']}")
                     
                     print("\n" + "─"*70 + "\n")
                 else:
@@ -190,12 +235,12 @@ Keep code concise and focused on the task."""
                     pass
             
             except Exception as e:
-                print(f"\n❌ Error calling Gemini: {e}\n")
+                print(f"\nError calling Gemini: {e}\n")
                 # Remove the failed exchange from history
                 conversation_history = conversation_history[:-1]
     
     except KeyboardInterrupt:
-        print("\n\n👋 Interrupted by user. Goodbye!")
+        print("\n\nInterrupted by user. Goodbye!")
     
     finally:
         # Cleanup
